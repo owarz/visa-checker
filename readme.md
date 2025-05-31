@@ -10,7 +10,7 @@ Bu bot, Schengen vizesi için randevu durumlarını otomatik olarak takip eder v
 - 🚦 Sadece 'açık' (`open`) veya 'bekleme listesi açık' (`waitlist_open`) durumundaki randevuları bildirme
 - 📱 Telegram üzerinden anlık bildirimler
 - ⏰ Özelleştirilebilir kontrol sıklığı (Cron formatı)
-- 🚫 Telegram API rate limit yönetimi
+- 🚫 Telegram API rate limit yönetimi (dakikada gönderilen mesaj sayısını ve yeniden deneme süresini ayarlar)
 - 🔍 Detaylı hata ayıklama modu (`DEBUG=true`)
 - 💾 Gönderilen bildirimleri ID bazlı önbelleğe alarak tekrar gönderimi engelleme
 
@@ -125,13 +125,13 @@ TELEGRAM_RETRY_AFTER=        # Default: 5000 (Rate limit durumunda bekleme süre
 
 # Uygulama Yapılandırması / Application Configuration
 CHECK_INTERVAL=*/5 * * * *  # Kontrol sıklığı (Cron formatı, varsayılan: 5 dakikada bir)
-TARGET_COUNTRY=tur          # Takip edilecek KAYNAK ülke kodu (API'deki country_code, örn: tur, gbr, are)
+TARGET_COUNTRY=tur          # Takip edilecek KAYNAK ülke kodu (API'deki country_code, örn: tur, gbr, are). 
                             # Tüm kaynak ülkeler için 'all' yazılabilir.
 
 # Randevu Filtreleme / Appointment Filtering
-CITIES=Ankara,Istanbul      # Takip edilecek şehirler (API'deki center alanından çıkarılır, virgülle ayrılır, boş bırakılırsa tüm şehirler)
-MISSION_COUNTRY=nld,fra     # Takip edilecek HEDEF ülke kodları (API'deki mission_code, virgülle ayrılır, örn: nld,fra,deu)
-VISA_SUBCATEGORIES=Tourism,Business # Takip edilecek vize tipleri (API'deki visa_type alanıyla eşleşir, virgülle ayrılır, boş bırakılırsa tüm tipler)
+CITIES=Ankara,Istanbul      # Takip edilecek şehirler (API'deki center alanından çıkarılır, virgülle ayrılır, boş bırakılırsa tüm şehirler). Örnek: "Netherlands Visa Application Centre - Ankara" için "Ankara".
+MISSION_COUNTRY=nld,fra     # Takip edilecek HEDEF ülke kodları (API'deki mission_code, küçük harfle, virgülle ayrılır, örn: nld,fra,deu). Bu alan zorunludur.
+VISA_SUBCATEGORIES=Tourism,Business # Takip edilecek vize tipleri (API'deki visa_type alanıyla kısmi eşleşme, virgülle ayrılır, boş bırakılırsa tüm tipler). Örnek: "TOURISM VISA APPLICATION", "BUSINESS VISA APPLICATION"
 
 # Hata Ayıklama / Debug Configuration
 DEBUG=false                 # Detaylı logları görmek için 'true' yapın
@@ -148,10 +148,10 @@ CACHE_CLEANUP_INTERVAL=      # Önbellek temizleme sıklığı (Default: 8640000
 
 **Önemli `.env` Açıklamaları:**
 
-- `TARGET_COUNTRY`: API yanıtındaki `country_code` alanına göre filtreler (örn: `tur`). Tüm ülkeler için `all` yazılabilir.
+- `TARGET_COUNTRY`: API yanıtındaki `country_code` alanına göre filtreler (örn: `tur`, `gbr`). Tüm ülkeler için `all` yazılabilir. Varsayılan: `tur`.
 - `CITIES`: API yanıtındaki `center` alanının sonundaki şehir ismine göre filtreler. Örnek `center` değerleri: `Netherlands Visa Application Centre - Antalya`, `Bulgaria Visa Application Center, Ankara`. Virgülle ayrılır. Boş bırakılırsa şehir filtresi uygulanmaz.
-- `MISSION_COUNTRY`: API yanıtındaki `mission_code` alanına göre filtreler (örn: `nld`, `fra`). Virgülle ayrılır. Bu alan zorunludur.
-- `VISA_SUBCATEGORIES`: API yanıtındaki `visa_type` alanının içinde geçen metinlere göre filtreler (örn: `Tourism`, `Truck Driver`). Virgülle ayrılır. Boş bırakılırsa vize tipi filtresi uygulanmaz.
+- `MISSION_COUNTRY`: API yanıtındaki `mission_code` alanına göre (küçük harfle) filtreler (örn: `nld`, `fra`). Virgülle ayrılır. Bu alan zorunludur, varsayılan olarak `nld` kullanılır eğer boş bırakılırsa.
+- `VISA_SUBCATEGORIES`: API yanıtındaki `visa_type` alanının içinde geçen metinlere göre (büyük/küçük harf duyarsız) filtreler (örn: `Tourism`, `Job Seeker`). Virgülle ayrılır. Boş bırakılırsa vize tipi filtresi uygulanmaz.
 
 5. TypeScript kodunu JavaScript'e derleyin:
 
@@ -208,10 +208,10 @@ Bot başarıyla başladığında konsolda `Vize randevu kontrolü başlatıldı.
 ### Randevu Takip Ayarları
 
 - `CHECK_INTERVAL` (Opsiyonel): Randevu kontrolü sıklığı (Cron formatı, Varsayılan: `*/5 * * * *` - 5 dakikada bir).
-- `TARGET_COUNTRY` (Opsiyonel): Takip edilecek kaynak ülke kodu (API'deki `country_code`). Varsayılan: `Turkiye`. Tüm ülkeler için `all`.
-- `CITIES` (Opsiyonel): Takip edilecek şehirler (API'deki `center` alanından çıkarılır, virgülle ayrılır). Boş bırakılırsa filtre uygulanmaz.
-- `MISSION_COUNTRY` (Opsiyonel): Randevusu takip edilecek **hedef ülke kodları** (API'deki `mission_code`, virgülle ayrılır). Varsayılan: `Netherlands` (`nld` olmalı, düzeltilecek!).
-- `VISA_SUBCATEGORIES` (Opsiyonel): Takip edilecek vize tipleri (API'deki `visa_type` alanıyla kısmi eşleşme, virgülle ayrılır). Boş bırakılırsa filtre uygulanmaz.
+- `TARGET_COUNTRY` (Opsiyonel): Takip edilecek kaynak ülke kodu (API'deki `country_code`, küçük harfle, örn: `tur`, `gbr`). Varsayılan: `tur`. Tüm ülkeler için `all` yazılabilir.
+- `CITIES` (Opsiyonel): Takip edilecek şehirler (API'deki `center` alanından çıkarılır, virgülle ayrılır, büyük/küçük harf duyarsız). Boş bırakılırsa filtre uygulanmaz. Örnek `center` değerleri: `Netherlands Visa Application Centre - Antalya` için `Antalya`, `Bulgaria Visa Application Center, Ankara` için `Ankara`.
+- `MISSION_COUNTRY` (Opsiyonel): Randevusu takip edilecek **hedef ülke kodları** (API'deki `mission_code`, küçük harfle, virgülle ayrılır, örn: `nld,fra,deu`). Boş bırakılırsa varsayılan olarak `nld` kullanılır.
+- `VISA_SUBCATEGORIES` (Opsiyonel): Takip edilecek vize tipleri (API'deki `visa_type` alanıyla kısmi eşleşme, virgülle ayrılır, büyük/küçük harf duyarsız). Boş bırakılırsa filtre uygulanmaz. Örnekler: `Tourism`, `Job Seeker`, `Family visit`.
 
 ### Sistem Ayarları
 
@@ -224,21 +224,21 @@ Bot başarıyla başladığında konsolda `Vize randevu kontrolü başlatıldı.
 
 ## 📱 Bildirim Örneği
 
-Bot, filtrelerinize uyan ve durumu `open` veya `waitlist_open` olan bir randevu bulduğunda, önbellekte yoksa şu formatta bir mesaj gönderir:
+Bot, filtrelerinize uyan ve durumu `open` veya `waitlist_open` olan bir randevu bulduğunda, önbellekte yoksa `src/services/telegram.ts` içindeki `formatMessage` fonksiyonuna göre Telegram'a şu formatta bir mesaj gönderir (emojiler ve bazı alanlar duruma göre değişebilir):
 
 ```
 *✅ YENİ RANDEVU DURUMU! *
 
-🏢 *Merkez:* Estonia Visa Application Centre - Istanbul Beyoglu
-🌍 *Ülke/Misyon:* TUR -> EST
-🛂 *Kategori:* KISA DONEM VIZE BASVURUSU / SHORT TERM VISA APPLICATION
+🏢 *Merkez:* Netherlands Visa Application Centre - Ankara
+🌍 *Ülke/Misyon:* TUR -> NLD
+🛂 *Kategori:* KISA DONEM VIZE / SHORT TERM VISA
 📄 *Tip:* TURIZM VIZE BASVURUSU / TOURISM VISA APPLICATION
 🚦 *Durum:* ✅ open
-🗓️ *Son Müsait Tarih:* 27/05/2025
+🗓️ *Son Müsait Tarih:* 22/07/2025
 
-📊 *Takip Sayısı:* 1
+📊 *Takip Sayısı:* 6
 
-⏰ *Son Kontrol:* 2 May 2025 14:39:04
+⏰ *Son Kontrol:* 31 May 2025 12:02:56
 ```
 
 (Not: Emoji ve format, randevu durumuna göre değişebilir: ✅ `open`, ⏳ `waitlist_open`)
@@ -266,11 +266,11 @@ Bot, filtrelerinize uyan ve durumu `open` veya `waitlist_open` olan bir randevu 
 4.  **Rate limit hatası alıyorum**
 
     - Telegram çok sık mesaj gönderildiği için botu geçici olarak engellemiş olabilir.
-    - `.env` dosyasında `TELEGRAM_RATE_LIMIT_MINUTES` değerini artırarak dakikada gönderilecek mesaj sayısını azaltabilirsiniz.
+    - `.env` dosyasında `TELEGRAM_RATE_LIMIT_MINUTES` değerini artırarak dakikada gönderilecek mesaj sayısını azaltabilirsiniz (aslında bu ayar `config.telegram.rateLimit` olarak koda yansır ve Telegram servisi bu değeri doğrudan kullanır, bu nedenle kontroller arası süreyi etkiler).
     - `.env` dosyasında `CHECK_INTERVAL` değerini değiştirerek kontroller arasındaki süreyi artırabilirsiniz (örn: `*/10 * * * *` 10 dakikada bir).
 
 5.  **API URL'si değişirse ne yapmalıyım?**
-    - Yeni API adresini `.env` dosyasındaki `VISA_API_URL` değişkenine yazın.
+    - Mecburen yeni update beklemeniz gerekecek.
 
 ## 🚨 Hata Bildirimi
 
