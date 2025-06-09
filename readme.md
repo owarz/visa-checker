@@ -24,6 +24,28 @@ Bu bot, Schengen vizesi için randevu durumlarını otomatik olarak takip eder v
 - Telegram Kanal/Grup ID'si
 - **Alternatif:** Docker
 
+#### Docker Kurulumu
+
+Docker'ı sisteminize kurmak için:
+
+- **Windows/Mac:**  
+  [Docker Desktop](https://www.docker.com/products/docker-desktop/) uygulamasını indirip kurun.
+
+- **Linux (Ubuntu/Debian):**
+  
+  ```bash
+  sudo apt update
+  curl -fsSL https://get.docker.com -o get-docker.sh
+  sudo sh ./get-docker.sh
+
+  # post installation steps
+  sudo groupadd docker
+  sudo usermod -aG docker $USER
+  # Log out and log back in so that your group membership is re-evaluated.
+  ```
+
+Kurulumdan sonra terminalde `docker --version` ve `docker compose version` komutları ile kurulumun başarılı olduğunu doğrulayabilirsiniz.
+
 ### Donanım/Hosting Gereksinimleri
 
 Bot'un sürekli çalışabilmesi için aşağıdaki seçeneklerden birine ihtiyacınız var:
