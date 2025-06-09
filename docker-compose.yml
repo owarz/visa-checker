@@ -1,0 +1,7 @@
+services:
+  visa-checker:
+    build: .
+    container_name: visa-checker
+    restart: unless-stopped
+    env_file:
+      - .env
