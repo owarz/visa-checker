@@ -22,6 +22,29 @@ Bu bot, Schengen vizesi için randevu durumlarını otomatik olarak takip eder v
 - Paket yöneticisi (npm, yarn veya pnpm)
 - Telegram Bot Token'ı
 - Telegram Kanal/Grup ID'si
+- **Alternatif:** Docker
+
+#### Docker Kurulumu
+
+Docker'ı sisteminize kurmak için:
+
+- **Windows/Mac:**  
+  [Docker Desktop](https://www.docker.com/products/docker-desktop/) uygulamasını indirip kurun.
+
+- **Linux (Ubuntu/Debian):**
+  
+  ```bash
+  sudo apt update
+  curl -fsSL https://get.docker.com -o get-docker.sh
+  sudo sh ./get-docker.sh
+
+  # post installation steps
+  sudo groupadd docker
+  sudo usermod -aG docker $USER
+  # Log out and log back in so that your group membership is re-evaluated.
+  ```
+
+Kurulumdan sonra terminalde `docker --version` ve `docker compose version` komutları ile kurulumun başarılı olduğunu doğrulayabilirsiniz.
 
 ### Donanım/Hosting Gereksinimleri
 
@@ -195,6 +218,32 @@ pnpm start
 ```
 
 Bot başarıyla başladığında konsolda `Vize randevu kontrolü başlatıldı...` mesajını ve yapılandırma detaylarını görmelisiniz.
+
+---
+
+## 🐳 Docker ile Çalıştırma
+
+Node.js veya paket yöneticisi kurmadan, Docker ile hızlıca başlatabilirsiniz. .env dosyasını düzenledikten sonra aşağıdaki adımları izleyin:
+
+### Botu başlatmak için
+
+```bash
+docker compose up -d --build
+```
+
+### Botu durdurmak için
+
+```bash
+docker compose down
+```
+
+### Logları görmek için
+
+```bash
+docker compose logs -f
+```
+
+---
 
 ## ⚙️ Yapılandırma Seçenekleri (.env Dosyası)
 
