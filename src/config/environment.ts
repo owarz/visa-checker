@@ -1,4 +1,13 @@
 import dotenv from "dotenv";
+import { DEFAULT_VALUES } from "../utils/constants";
+import {
+  validateRequiredEnvVars,
+  validateTelegramChannelId,
+  parseCommaSeparatedString,
+  parseNumericEnvVar,
+  parseBooleanEnvVar,
+  ValidationError,
+} from "../utils/validation";
 
 dotenv.config();
 
@@ -36,81 +45,84 @@ export interface EnvironmentConfig {
 }
 
 /**
- * Çevre değişkenlerini doğrular ve yapılandırma nesnesini oluşturur
- * @returns Doğrulanmış yapılandırma nesnesi
- * @throws Eksik veya hatalı yapılandırma durumunda hata fırlatır
+ * Validates environment variables and creates configuration object
+ * @returns Validated configuration object
+ * @throws ValidationError for missing or invalid configuration
  */
 function validateEnvironment(): EnvironmentConfig {
-  // Zorunlu çevre değişkenlerini kontrol et
-  const requiredEnvVars = {
-    TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
-    TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID,
-  };
+  try {
+    // Validate required environment variables
+    validateRequiredEnvVars({
+      TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
+      TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID,
+    });
 
-  // Eksik değişkenleri bul
-  const missingVars = Object.entries(requiredEnvVars)
-    .filter(([_, value]) => !value)
-    .map(([key]) => key);
+    // Validate Telegram channel ID format
+    validateTelegramChannelId(process.env.TELEGRAM_CHAT_ID);
 
-  // Eksik değişken varsa hata fırlat
-  if (missingVars.length > 0) {
-    console.error(`Eksik çevre değişkenleri: ${missingVars.join(", ")}`);
-    process.exit(1);
+    // Parse environment variables with defaults
+    const cities = parseCommaSeparatedString(process.env.CITIES);
+    const missionCountries = parseCommaSeparatedString(process.env.MISSION_COUNTRY);
+    const subCategories = parseCommaSeparatedString(process.env.VISA_SUBCATEGORIES);
+
+    // Use default mission countries if none specified
+    const finalMissionCountries = missionCountries.length > 0
+      ? missionCountries.map((country) => country.toLowerCase())
+      : [...DEFAULT_VALUES.MISSION_COUNTRIES];
+
+    // Build and return configuration object
+    return {
+      telegram: {
+        botToken: process.env.TELEGRAM_BOT_TOKEN!,
+        channelId: process.env.TELEGRAM_CHAT_ID,
+        rateLimit: parseNumericEnvVar(
+          process.env.TELEGRAM_RATE_LIMIT_MINUTES,
+          DEFAULT_VALUES.TELEGRAM_RATE_LIMIT
+        ),
+        retryAfter: parseNumericEnvVar(
+          process.env.TELEGRAM_RETRY_AFTER,
+          DEFAULT_VALUES.TELEGRAM_RETRY_AFTER
+        ),
+      },
+      app: {
+        checkInterval: process.env.CHECK_INTERVAL || DEFAULT_VALUES.CHECK_INTERVAL,
+        targetCountry: process.env.TARGET_COUNTRY?.toLowerCase() || DEFAULT_VALUES.TARGET_COUNTRY,
+        targetCities: cities,
+        missionCountries: finalMissionCountries,
+        targetSubCategories: subCategories,
+        debug: parseBooleanEnvVar(process.env.DEBUG),
+      },
+      api: {
+        visaApiUrl: process.env.VISA_API_URL || DEFAULT_VALUES.VISA_API_URL,
+        maxRetries: parseNumericEnvVar(process.env.MAX_RETRIES, DEFAULT_VALUES.MAX_RETRIES),
+        retryDelayBase: parseNumericEnvVar(
+          process.env.RETRY_DELAY_BASE,
+          DEFAULT_VALUES.RETRY_DELAY_BASE
+        ),
+      },
+      cache: {
+        maxSize: parseNumericEnvVar(process.env.MAX_CACHE_SIZE, DEFAULT_VALUES.MAX_CACHE_SIZE),
+        cleanupInterval: parseNumericEnvVar(
+          process.env.CACHE_CLEANUP_INTERVAL,
+          DEFAULT_VALUES.CACHE_CLEANUP_INTERVAL
+        ),
+      },
+    };
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      console.error(`Configuration error: ${error.message}`);
+    } else {
+      console.error('Unexpected configuration error:', error);
+    }
+    
+    // Only exit in non-test environments
+    if (process.env.NODE_ENV !== 'test') {
+      process.exit(1);
+    }
+    
+    // In test environment, throw the error to be handled by the test framework
+    throw error;
   }
-
-  // Telegram kanal ID'sini doğrula
-  const channelId = process.env.TELEGRAM_CHAT_ID;
-  if (!channelId || !/^-?\d+$/.test(channelId)) {
-    console.error("Geçersiz TELEGRAM_CHAT_ID formatı");
-    process.exit(1);
-  }
-
-  // Şehirleri virgülle ayrılmış listeden diziye çevir
-  const cities = process.env.CITIES
-    ? process.env.CITIES.split(",").map((city) => city.trim())
-    : [];
-
-  // Hedef ülkeleri virgülle ayrılmış listeden diziye çevir
-  const missionCountries = process.env.MISSION_COUNTRY
-    ? process.env.MISSION_COUNTRY.split(",").map((country) =>
-        country.trim().toLowerCase()
-      )
-    : ["nld"];
-
-  // Parse subcategories from env
-  const subCategories = process.env.VISA_SUBCATEGORIES
-    ? process.env.VISA_SUBCATEGORIES.split(",").map((cat) => cat.trim())
-    : [];
-
-  // Yapılandırma nesnesini oluştur ve döndür
-  return {
-    telegram: {
-      botToken: process.env.TELEGRAM_BOT_TOKEN as string,
-      channelId,
-      rateLimit: Number(process.env.TELEGRAM_RATE_LIMIT_MINUTES) || 15,
-      retryAfter: Number(process.env.TELEGRAM_RETRY_AFTER) || 5000,
-    },
-    app: {
-      checkInterval: process.env.CHECK_INTERVAL || "*/5 * * * *",
-      // The target country should be a lower-case country code (e.g., "tur", "gbr"). Defaults to "tur".
-      targetCountry: process.env.TARGET_COUNTRY?.toLowerCase() || "tur",
-      targetCities: cities,
-      missionCountries,
-      targetSubCategories: subCategories,
-      debug: process.env.DEBUG === "true",
-    },
-    api: {
-      visaApiUrl:
-        process.env.VISA_API_URL || "https://api.visasbot.com/api/visa/list",
-      maxRetries: Number(process.env.MAX_RETRIES) || 3,
-      retryDelayBase: Number(process.env.RETRY_DELAY_BASE) || 1000,
-    },
-    cache: {
-      maxSize: Number(process.env.MAX_CACHE_SIZE) || 1000,
-      cleanupInterval:
-        Number(process.env.CACHE_CLEANUP_INTERVAL) || 24 * 60 * 60 * 1000,
-    },
-  };
 }
 
 // Yapılandırma nesnesini oluştur ve dışa aktar

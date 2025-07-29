@@ -1,174 +1,126 @@
+/**
+ * @fileoverview Core appointment checking functionality
+ * Handles the main logic for checking visa appointments and processing notifications
+ */
+
 import type { VisaAppointment } from "../types";
 import { config } from "../config/environment";
 import { fetchAppointments } from "../services/api";
 import { cacheService } from "../services/cache";
 import { telegramService } from "../services/telegram";
-import { extractCity } from "./cityExtractor";
+import { appointmentFilterService } from "../services/filter";
 
 /**
- * Ana kontrol fonksiyonu
- * Yeni randevuları kontrol eder ve uygun olanları Telegram'a gönderir
+ * Main function to check for new appointments and send notifications
+ * Fetches appointments, filters them, and processes valid ones
  */
 export async function checkAppointments(): Promise<void> {
   try {
     const appointments = await fetchAppointments();
 
     if (appointments.length === 0) {
-      console.log("Randevu bulunamadı veya bir hata oluştu");
+      console.log("No appointments found or an error occurred");
       return;
     }
 
-    for (const appointment of appointments) {
-      // First, check if the appointment is valid based on configured filters
-      if (!isAppointmentValid(appointment)) continue;
-
-      // Create a unique key for the appointment using its ID
-      const appointmentKey = cacheService.createKey(appointment);
-
-      // Debug modunda tüm randevuları göster
-      if (config.app.debug) {
-        console.log(
-          `Geçerli randevu bulundu (ID: ${appointment.id}): ${appointment.center}, Durum: ${appointment.status}, Son Kontrol: ${appointment.last_checked_at}`
-        );
-      }
-
-      // Check if this appointment ID has already been sent (is in cache)
-      if (!cacheService.has(appointmentKey)) {
-        if (config.app.debug) {
-          console.log(
-            `Randevu (ID: ${appointment.id}) önbellekte yok. İşleniyor...`
-          );
-        }
-        await processNewAppointment(appointment, appointmentKey);
-      } else if (config.app.debug) {
-        console.log(
-          `Randevu (ID: ${appointment.id}) zaten önbellekte. Atlanıyor.`
-        );
-      }
-    }
+    await processAppointments(appointments);
   } catch (error) {
-    console.error("Randevu kontrolü sırasında hata:", error);
+    console.error("Error during appointment check:", error);
   }
 }
 
 /**
- * Randevunun geçerli olup olmadığını kontrol eder
- * @param appointment Kontrol edilecek randevu
- * @returns Randevu geçerli ise true, değilse false
+ * Processes a list of appointments, filtering and handling valid ones
+ * @param appointments Array of appointments to process
  */
-function isAppointmentValid(appointment: VisaAppointment): boolean {
-  // Only check appointments with 'open' or 'waitlist_open' status
-  if (appointment.status !== "open" && appointment.status !== "waitlist_open") {
-    if (config.app.debug) {
-      console.log(
-        `Skipping appointment ID ${appointment.id} due to status: ${appointment.status}`
-      );
+async function processAppointments(appointments: VisaAppointment[]): Promise<void> {
+  for (const appointment of appointments) {
+    if (!appointmentFilterService.isAppointmentValid(appointment)) {
+      continue;
     }
-    return false;
-  }
 
-  // Filter by target source country code (e.g., 'tur')
-  // Note: The config still uses targetCountry which might be a full name like 'Turkiye'
-  // We should ideally compare country codes directly if TARGET_COUNTRY env var is set to a code like 'tur'
-  // For now, assuming country_code matches or TARGET_COUNTRY needs adjustment.
-  // Example check (adjust if TARGET_COUNTRY is not a code):
-  if (
-    config.app.targetCountry.toLowerCase() !== "all" && // Add ability to check all source countries
-    appointment.country_code.toLowerCase() !==
-      config.app.targetCountry.toLowerCase()
-  ) {
-    if (config.app.debug) {
-      console.log(
-        `Skipping appointment ID ${appointment.id}: Source country ${appointment.country_code} doesn't match target ${config.app.targetCountry}`
-      );
-    }
-    return false;
+    await handleValidAppointment(appointment);
   }
-
-  // Filter by target mission country codes (e.g., ['nld', 'fra'])
-  if (
-    !config.app.missionCountries.some(
-      (code) => code.toLowerCase() === appointment.mission_code.toLowerCase()
-    )
-  ) {
-    if (config.app.debug) {
-      console.log(
-        `Skipping appointment ID ${appointment.id}: Mission country ${
-          appointment.mission_code
-        } not in target list [${config.app.missionCountries.join(", ")}]`
-      );
-    }
-    return false;
-  }
-
-  // If target cities are specified, filter by city extracted from center name
-  if (config.app.targetCities.length > 0) {
-    const appointmentCity = extractCity(appointment.center); // Use 'center' field
-    const cityMatch = config.app.targetCities.some((city) =>
-      appointmentCity.toLowerCase().includes(city.toLowerCase())
-    );
-    if (!cityMatch) {
-      if (config.app.debug) {
-        console.log(
-          `Skipping appointment ID ${
-            appointment.id
-          }: City ${appointmentCity} not in target list [${config.app.targetCities.join(
-            ", "
-          )}]`
-        );
-      }
-      return false;
-    }
-  }
-
-  // If target visa types (subcategories) are specified, filter by visa_type
-  if (config.app.targetSubCategories.length > 0) {
-    // Check if appointment.visa_type exists and is a string before calling toLowerCase()
-    const visaType = appointment.visa_type || "";
-    const subCategoryMatch = config.app.targetSubCategories.some(
-      (subCategory) =>
-        visaType.toLowerCase().includes(subCategory.toLowerCase())
-    );
-    if (!subCategoryMatch) {
-      if (config.app.debug) {
-        console.log(
-          `Skipping appointment ID ${
-            appointment.id
-          }: Visa type "${visaType}" not in target list [${config.app.targetSubCategories.join(
-            ", "
-          )}]`
-        );
-      }
-      return false;
-    }
-  }
-
-  // If all checks pass, the appointment is valid
-  return true;
 }
 
 /**
- * Yeni randevuyu işler ve Telegram'a gönderir
- * @param appointment İşlenecek randevu
- * @param appointmentKey Randevu için önbellek anahtarı
+ * Handles a single valid appointment, checking cache and sending notifications
+ * @param appointment The valid appointment to handle
+ */
+async function handleValidAppointment(appointment: VisaAppointment): Promise<void> {
+  const appointmentKey = cacheService.createKey(appointment);
+
+  logAppointmentDetails(appointment);
+
+  if (!cacheService.has(appointmentKey)) {
+    logProcessingAppointment(appointment);
+    await processNewAppointment(appointment, appointmentKey);
+  } else {
+    logSkippingCachedAppointment(appointment);
+  }
+}
+
+/**
+ * Logs appointment details if debug mode is enabled
+ * @param appointment The appointment to log
+ */
+function logAppointmentDetails(appointment: VisaAppointment): void {
+  if (config.app.debug) {
+    console.log(
+      `Valid appointment found (ID: ${appointment.id}): ${appointment.center}, Status: ${appointment.status}, Last checked: ${appointment.last_checked_at}`
+    );
+  }
+}
+
+/**
+ * Logs that an appointment is being processed if debug mode is enabled
+ * @param appointment The appointment being processed
+ */
+function logProcessingAppointment(appointment: VisaAppointment): void {
+  if (config.app.debug) {
+    console.log(
+      `Appointment (ID: ${appointment.id}) not in cache. Processing...`
+    );
+  }
+}
+
+/**
+ * Logs that a cached appointment is being skipped if debug mode is enabled
+ * @param appointment The appointment being skipped
+ */
+function logSkippingCachedAppointment(appointment: VisaAppointment): void {
+  if (config.app.debug) {
+    console.log(
+      `Appointment (ID: ${appointment.id}) already in cache. Skipping.`
+    );
+  }
+}
+
+/**
+ * Processes a new appointment by caching it and sending notification
+ * @param appointment The appointment to process
+ * @param appointmentKey The cache key for the appointment
  */
 async function processNewAppointment(
   appointment: VisaAppointment,
   appointmentKey: string
 ): Promise<void> {
+  // Add to cache first to prevent duplicate processing
   cacheService.set(appointmentKey);
 
   console.log(
-    `Yeni randevu bildirimi gönderiliyor: ID ${appointment.id} - ${appointment.center}`
+    `Sending new appointment notification: ID ${appointment.id} - ${appointment.center}`
   );
+  
   const success = await telegramService.sendNotification(appointment);
+  
   if (success) {
-    console.log(`Bildirim başarıyla gönderildi: ID ${appointment.id}`);
+    console.log(`Notification sent successfully: ID ${appointment.id}`);
   } else {
-    // Hata durumunda önbellekten sil ve bir sonraki kontrolde tekrar dene
     console.error(
-      `Bildirim gönderilemedi: ID ${appointment.id}. Önbellekten siliniyor.`
+      `Failed to send notification: ID ${appointment.id}. Removing from cache.`
     );
+    // Remove from cache if notification failed, so we can retry next time
     cacheService.delete(appointmentKey);
   }
 }

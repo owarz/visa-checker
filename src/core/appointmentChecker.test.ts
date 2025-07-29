@@ -1,5 +1,10 @@
 import { checkAppointments } from './appointmentChecker';
 
+// Set test environment variables before importing modules that validate them
+process.env.NODE_ENV = 'test';
+process.env.TELEGRAM_BOT_TOKEN = 'test_token';
+process.env.TELEGRAM_CHAT_ID = '-1001234567890';
+
 // Mock the config module to prevent process.exit and provide dummy values
 jest.mock('../config/environment', () => ({
   config: {
@@ -13,7 +18,7 @@ jest.mock('../config/environment', () => ({
     },
     telegram: {
       botToken: 'dummy_token',
-      chatId: 'dummy_chat_id',
+      channelId: 'dummy_chat_id',
     },
   },
 }));
@@ -22,7 +27,7 @@ jest.mock('../config/environment', () => ({
 jest.mock('../services/cache', () => ({
   cacheService: {
     startCleanupInterval: jest.fn(),
-    createKey: jest.fn((appointment) => `key-${appointment.id}`),
+    createKey: jest.fn((appointment: { id: number }) => `key-${appointment.id}`),
     has: jest.fn(() => false),
     set: jest.fn(),
     delete: jest.fn(),
@@ -43,7 +48,7 @@ jest.mock('../services/telegram', () => ({
 
 // Mock the cityExtractor (if needed, for now just a basic mock)
 jest.mock('./cityExtractor', () => ({
-  extractCity: jest.fn((center) => center.split(',')[0]),
+  extractCity: jest.fn((center: string) => center.split(',')[0]),
 }));
 
 describe('Appointment Checker', () => {

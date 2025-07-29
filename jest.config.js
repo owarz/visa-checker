@@ -3,8 +3,8 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   testMatch: [
-    '**/__tests__/**/*.+(ts|tsx|js)',
-    '**/?(*.)+(spec|test).+(ts|tsx|js)'
+    '**/src/**/__tests__/**/*.+(ts|tsx)',
+    '**/src/**/?(*.)+(spec|test).+(ts|tsx)'
   ],
   transform: {
     '^.+\.(ts|tsx)$': ['ts-jest', {

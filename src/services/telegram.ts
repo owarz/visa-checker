@@ -3,6 +3,7 @@ import type { Context } from "telegraf";
 import type { Update } from "telegraf/typings/core/types/typegram";
 import type { VisaAppointment } from "../types";
 import { config } from "../config/environment";
+import { STATUS_EMOJI } from "../utils/constants";
 
 interface TelegramError {
   response?: {
@@ -28,6 +29,11 @@ class TelegramService {
     this.startRateLimitReset();
   }
 
+  /**
+   * Escapes markdown special characters for MarkdownV2 format
+   * @param text Text to escape
+   * @returns Escaped text
+   */
   private escapeMarkdown(text: string): string {
     return text.replace(/[_*[\]()~`>#+=|{}.!-]/g, "\\$&");
   }
@@ -87,46 +93,60 @@ class TelegramService {
   }
 
   /**
-   * Randevu bilgilerini okunabilir bir mesaj formatına dönüştürür
+   * Formats appointment information into a readable message
+   * @param appointment The appointment to format
+   * @returns Formatted message string in MarkdownV2 format
    */
   formatMessage(appointment: VisaAppointment): string {
     const lastChecked = new Date(appointment.last_checked_at);
-
-    const formatDate = (date: Date | string) => {
-      if (typeof date === "string") {
-        date = new Date(date);
-      }
-      return date.toLocaleString("tr-TR", {
-        timeZone: "Europe/Istanbul",
-        dateStyle: "medium",
-        timeStyle: "medium",
-      });
-    };
-
-    const formatAvailableDate = (dateStr?: string): string => {
-      if (!dateStr) return "Bilgi Yok";
-      return this.escapeMarkdown(dateStr);
-    };
-
-    const statusEmoji =
-      {
-        open: "✅",
-        waitlist_open: "⏳",
-        closed: "❌",
-        waitlist_closed: "🔒",
-      }[appointment.status] || "❓";
+    const statusEmoji = this.getStatusEmoji(appointment.status);
 
     return [
-      `*${statusEmoji} YENİ RANDEVU DURUMU\\! *`,
-      `🏢 *Merkez:* ${this.escapeMarkdown(appointment.center)}`,
-      `🌍 *Ülke/Misyon:* ${this.escapeMarkdown(appointment.country_code.toUpperCase())} \\-\\> ${this.escapeMarkdown(appointment.mission_code.toUpperCase())}`,
-      `🏛️ *Kategori:* ${this.escapeMarkdown(appointment.visa_category)}`,
-      `📄 *Tip:* ${this.escapeMarkdown(appointment.visa_type)}`,
-      `🚦 *Durum:* ${statusEmoji} ${this.escapeMarkdown(appointment.status)}`,
-      `📅 *Son Müsait Tarih:* ${formatAvailableDate(appointment.last_available_date)}`,
-      `📊 *Takip Sayısı:* ${appointment.tracking_count}`,
-      `⏰ *Son Kontrol:* ${this.escapeMarkdown(formatDate(lastChecked))}`
+      `*${statusEmoji} NEW APPOINTMENT STATUS\\! *`,
+      `🏢 *Center:* ${this.escapeMarkdown(appointment.center)}`,
+      `🌍 *Country/Mission:* ${this.escapeMarkdown(appointment.country_code.toUpperCase())} \\-\\> ${this.escapeMarkdown(appointment.mission_code.toUpperCase())}`,
+      `🏛️ *Category:* ${this.escapeMarkdown(appointment.visa_category)}`,
+      `📄 *Type:* ${this.escapeMarkdown(appointment.visa_type)}`,
+      `🚦 *Status:* ${statusEmoji} ${this.escapeMarkdown(appointment.status)}`,
+      `📅 *Last Available Date:* ${this.formatAvailableDate(appointment.last_available_date)}`,
+      `📊 *Tracking Count:* ${appointment.tracking_count}`,
+      `⏰ *Last Check:* ${this.escapeMarkdown(this.formatDate(lastChecked))}`
     ].join("\n");
+  }
+
+  /**
+   * Gets the appropriate emoji for appointment status
+   * @param status The appointment status
+   * @returns Emoji for the status
+   */
+  private getStatusEmoji(status: string): string {
+    return STATUS_EMOJI[status as keyof typeof STATUS_EMOJI] || "❓";
+  }
+
+  /**
+   * Formats a date for display
+   * @param date The date to format
+   * @returns Formatted date string
+   */
+  private formatDate(date: Date | string): string {
+    if (typeof date === "string") {
+      date = new Date(date);
+    }
+    return date.toLocaleString("tr-TR", {
+      timeZone: "Europe/Istanbul",
+      dateStyle: "medium",
+      timeStyle: "medium",
+    });
+  }
+
+  /**
+   * Formats the available date or returns default text if not available
+   * @param dateStr The date string to format
+   * @returns Formatted date or default text
+   */
+  private formatAvailableDate(dateStr?: string): string {
+    if (!dateStr) return "No Information";
+    return this.escapeMarkdown(dateStr);
   }
 
   /**
